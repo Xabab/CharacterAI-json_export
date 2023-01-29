@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CharacterAI json exporter
 // @namespace    http://tamperchrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html#nav=new-user-script+editormonkey.net/
-// @version      0.1
+// @version      0.2
 // @description  Export a chat history or a character definition in json format.
 // @author       Xabab
 // @run-at       document-idle
@@ -299,7 +299,7 @@ function parseChatJson(scrollBar){
     //console.log(messagesStrArr);
 
     //last message is always '...'
-    messagesStrArr.pop()
+    //messagesStrArr.pop()
 
     var json = new Object();
     json.chat = messagesStrArr;
