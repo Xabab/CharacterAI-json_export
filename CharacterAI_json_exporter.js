@@ -202,7 +202,7 @@ function chatTab(){
             onclick  : downloadChatJson
         });
         chatFooter.prepend(icon);
-    }, 1500);
+    }, 5000);
 }
 
 
