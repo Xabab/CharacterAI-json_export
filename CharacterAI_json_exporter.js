@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CharacterAI json exporter
 // @namespace    http://tamperchrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html#nav=new-user-script+editormonkey.net/
-// @version      0.2
+// @version      0.5.2
 // @description  Export a chat history or a character definition in json format.
 // @author       Xabab
 // @run-at       document-idle
@@ -21,6 +21,7 @@
 "on behalf of Characters and Generations usage rights (https://beta.character.ai/tos#:~:text=Characters%20and%20Generations).";
 "Any usage for data mining, robots, scraping or similar automated data gathering will violate CharacterAI's Terms of Service";
 "(https://beta.character.ai/tos#:~:text=Website%20or%20Services%20Content%2C%20Software%20and%20Trademarks) and thus is prohibited";
+
 
 'use strict';
 
@@ -110,7 +111,6 @@ function gmMain () {
             Observer.observe(document, {childList: true, subtree: true});
         })();
     }
-    downloadedOnce = false;
     setTimeout(() => {pageProcessed = false}, 10);
 }
 
@@ -217,26 +217,33 @@ function downloadChatJson(){
         scrollBar.scrollTop = -scrollBar.scrollHeight;
 
         if(scrollBar) {
-            loadingMoreMessages = true;
-
             //check if top message is a greeting. if true, stop observer and start parsing
+            if(!loadingMoreMessages) scrollToTop()
+
+            loadingMoreMessages = true;
+        };
+
+        function scrollToTop() {
             var messages = scrollBar.querySelectorAll('.msg-row')
+
             if(
                 messages[messages.length - 1].querySelector('.char-msg') &&
                 messages[messages.length - 1].querySelector('.flex-column').innerHTML.includes("@")
             ){
                 console.log("Xabab: Reached top")
                 observer.disconnect();
-
+                loadingMoreMessages = false;
                 setTimeout(() => {parseChatJson(scrollBar)}, 2000);
-
-
-            };
-        };
+            } else {
+                scrollBar.scrollTop = -scrollBar.scrollHeight;
+                window.setTimeout(scrollToTop, 3000);
+            }
+        }
     };
 
     // trigger first load of messages
     scrollBar.scrollTop = -scrollBar.scrollHeight;
+    console.log("Xabab: to prevent http response 500 (probably anti scraping measure), scrolling will be done in 3 second intervals. This will take some time, if you have a huge chat: about (countOfMessages/10)*3 seconds, i.e. about 30 seconds/100 messages.")
 
     //if not loading more messages (that's all of them) parse what we have
     setTimeout(() => {
@@ -253,7 +260,7 @@ function downloadChatJson(){
             };
             setTimeout(() => {parseChatJson(scrollBar)}, 2000);
         }
-    }, 20);
+    }, 200);
 }
 
 function parseChatJson(scrollBar){
@@ -301,13 +308,21 @@ function parseChatJson(scrollBar){
     //last message is always '...'
     //messagesStrArr.pop()
 
+    //Pygmalion expects user to send the first message, after which it sends greeting
+    messagesStrArr.unshift("You: ...");
+
     var json = new Object();
     json.chat = messagesStrArr;
     //console.log(JSON.stringify(json).replace(/(",")/g, '",\n\n"'));
 
 
     var title = document.querySelector('div.chattitle');
-    title.removeChild(title.querySelector('span'));
+    try{
+        title.removeChild(title.querySelector('span'));
+    }
+    catch(TypeError){
+        console.log("Xabab: oh, this is a private character? Then the name doesn't need stripping of interaction counter. Proceeding...")
+    }
     //console.log(title)
 
     var blob = new Blob([JSON.stringify(json).replace(/(",")/g, '",\n\n"')], {type: "text/plain;charset=utf-8"});
@@ -336,49 +351,52 @@ function downloadCharacterJson(){
 
     console.log(name, greeting, shortDescription, longDescription, categories, exampleDialog)
 
-    personalityTemplate = {
-        "character": name,
-        "personality": {
-            "Traits"             : [null],
-            "Mind"               : [null],
-            "Tags"               : categories,
-            "Mood"               : [null],
-            "Gender"             : null,
-            "Features"           : [null],
-            "Frame"              : null,
-            "Height"             : null,
-            "Weight"             : null,
-            "BustWaistHips"      : null,
-            "FootSize"           : null,
-            "Age"                : null,
-            "SexualOrientation"  : null,
-            "Loves"              : [null],
-            "Likes"              : [null],
-            "Despises"           : [null],
-            "Hates"              : [null],
-            "Clothes"            : [null]
-        },
-        "description": {
-            "short" : shortDescription,
-            "long"  : longDescription
-        }
-    }
+
+    var personalityTemplate =
+`[Character("${name}"){[
+   Personality("${name}"){
+      Traits("Whatewer") +
+      Mind(${'"' + categories.join('" + "') + '"' }) +
+      Mood("Whatewer") +
+      Gender("Whatewer") +
+      SexualOrientation("Whatewer") +
+      Loves("Whatewer") +
+      Likes("Whatewer") +
+      Despises("Whatewer") +
+      Dislikes("Whatewer") +
+      Hates("Whatewer")
+   ]},
+
+   Appearance("${name}"){[
+      Sex("Whatewer") +
+      Features("Whatewer") +
+      Frame("Whatewer") +
+      Height("Whatewer") +
+      Weight("Whatewer") +
+      Bust-Waist-Hips("Whatewer") +
+      FootSize("Whatewer") +
+      Age("Whatewer") +
+      Clothes("Whatewer")
+   ]},
+
+   Description("${name}"){[
+      ShortDescription("${shortDescription}") +
+      LongDescription("${longDescription}")
+   ]}
+}]`
 
 
-
-
-    var personality = JSON.stringify(personalityTemplate, null, 5)
-
-    console.log(personality)
+    console.log(personalityTemplate)
 
     var json = new Object();
     json.char_name        = name;
-    json.char_persona     = personality
+    //json.char_persona     = personality
+    json.char_persona     = personalityTemplate
     json.char_greeting    = greeting;
     json.world_scenario   = "";
     json.example_dialogue = exampleDialog.replaceAll(/({{char}})/g, name).replaceAll(/({{.*}})/g, "You");
 
-    var blob = new Blob([JSON.stringify(json)], {type: "text/plain;charset=utf-8"});
+    var blob = new Blob([JSON.stringify(json, null, 5)], {type: "text/plain;charset=utf-8"});
     saveAs(blob, `${name} character definition.json`);
 
 }
